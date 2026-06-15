@@ -1,0 +1,14 @@
+require('dotenv').config();
+
+const config = {
+  port: Number(process.env.PORT || 3000),
+  mongodbUri: process.env.MONGODB_URI || 'mongodb://localhost:27017/job_queue',
+  redisHost: process.env.REDIS_HOST || 'localhost',
+  redisPort: Number(process.env.REDIS_PORT || 6379),
+  redisPassword: process.env.REDIS_PASSWORD || undefined,
+  queueName: process.env.QUEUE_NAME || 'jobs',
+  jobProcessingDelayMs: Number(process.env.JOB_PROCESSING_DELAY_MS || 3000),
+  logLevel: process.env.LOG_LEVEL || 'info'
+};
+
+module.exports = { config };
