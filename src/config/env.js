@@ -7,6 +7,8 @@ const config = {
   redisPort: Number(process.env.REDIS_PORT || 6379),
   redisPassword: process.env.REDIS_PASSWORD || undefined,
   queueName: process.env.QUEUE_NAME || 'jobs',
+  deadLetterQueueName: process.env.DLQ_QUEUE_NAME || 'dead-letter-queue',
+  maxRetries: Number(process.env.MAX_RETRY_ATTEMPTS || 4),
   jobProcessingDelayMs: Number(process.env.JOB_PROCESSING_DELAY_MS || 3000),
   logLevel: process.env.LOG_LEVEL || 'info'
 };

@@ -2,7 +2,8 @@ const { Worker } = require('bullmq');
 const { config } = require('../config/env');
 const { logger } = require('../config/logger');
 const { connection } = require('../queues/jobQueue');
-const { markJobActive, markJobCompleted, markJobFailed } = require('../services/jobService');
+const { markJobActive, markJobCompleted } = require('../services/jobService');
+const { handleJobFailure } = require('../services/failureHandler');
 
 let workerInstance = null;
 
@@ -22,13 +23,20 @@ function initializeWorker() {
   workerInstance = new Worker(
     config.queueName,
     async (job) => {
-      await markJobActive(job.data.jobId);
-      logger.info({ component: 'worker', event: 'job_started', jobId: job.data.jobId, type: job.data.type }, 'Job Started');
+      await markJobActive(job.data.jobId, job.attemptsMade || 0);
+      logger.info(
+        { component: 'worker', event: 'JOB_STARTED', jobId: job.data.jobId, type: job.data.type, retryCount: job.attemptsMade || 0 },
+        'Job Started'
+      );
+
+      if (job.data.payload && job.data.payload.simulateFailure) {
+        throw new Error('Simulated job failure');
+      }
 
       await delay(config.jobProcessingDelayMs);
 
       await markJobCompleted(job.data.jobId);
-      logger.info({ component: 'worker', event: 'job_completed', jobId: job.data.jobId, type: job.data.type }, 'Job Completed');
+      logger.info({ component: 'worker', event: 'JOB_COMPLETED', jobId: job.data.jobId, type: job.data.type }, 'Job Completed');
 
       return { processed: true };
     },
@@ -43,14 +51,15 @@ function initializeWorker() {
       return;
     }
 
-    await markJobFailed(job.data.jobId, error.message).catch(() => undefined);
+    await handleJobFailure(job, error).catch(() => undefined);
 
     logger.error(
       {
         component: 'worker',
-        event: 'job_failed',
+        event: 'JOB_FAILED',
         jobId: job.data.jobId,
         type: job.data.type,
+        retryCount: job.attemptsMade || 0,
         error: error.message
       },
       'Job Failed'

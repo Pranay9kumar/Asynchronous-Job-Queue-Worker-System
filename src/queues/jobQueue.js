@@ -1,6 +1,7 @@
 const { Queue } = require('bullmq');
 const IORedis = require('ioredis');
 const { config } = require('../config/env');
+const { getBullMqBackoffConfig } = require('../config/backoff');
 
 const connection = new IORedis({
   host: config.redisHost,
@@ -14,7 +15,8 @@ const jobQueue = new Queue(config.queueName, {
   defaultJobOptions: {
     removeOnComplete: true,
     removeOnFail: false,
-    attempts: 1
+    attempts: config.maxRetries + 1,
+    backoff: getBullMqBackoffConfig()
   }
 });
 

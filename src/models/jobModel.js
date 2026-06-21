@@ -19,9 +19,19 @@ const jobSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ['WAITING', 'ACTIVE', 'COMPLETED', 'FAILED'],
+      enum: ['WAITING', 'ACTIVE', 'COMPLETED', 'FAILED', 'DEAD_LETTER'],
       default: 'WAITING',
       index: true
+    },
+    retryCount: {
+      type: Number,
+      default: 0,
+      min: 0
+    },
+    maxRetries: {
+      type: Number,
+      required: true,
+      min: 0
     },
     startedAt: {
       type: Date,
@@ -33,6 +43,14 @@ const jobSchema = new mongoose.Schema(
     },
     failureReason: {
       type: String,
+      default: null
+    },
+    lastFailureReason: {
+      type: String,
+      default: null
+    },
+    failedAt: {
+      type: Date,
       default: null
     }
   },
