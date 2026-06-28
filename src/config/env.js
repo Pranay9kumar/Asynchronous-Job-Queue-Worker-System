@@ -9,6 +9,9 @@ const config = {
   queueName: process.env.QUEUE_NAME || 'jobs',
   deadLetterQueueName: process.env.DLQ_QUEUE_NAME || 'dead-letter-queue',
   maxRetries: Number(process.env.MAX_RETRY_ATTEMPTS || 4),
+  workerConcurrency: Number(process.env.WORKER_CONCURRENCY || 3),
+  workerId: process.env.WORKER_ID || `worker-${process.pid}`,
+  rateLimitMaxJobsPerMinute: Number(process.env.RATE_LIMIT_MAX_JOBS_PER_MINUTE || 100),
   jobProcessingDelayMs: Number(process.env.JOB_PROCESSING_DELAY_MS || 3000),
   logLevel: process.env.LOG_LEVEL || 'info'
 };

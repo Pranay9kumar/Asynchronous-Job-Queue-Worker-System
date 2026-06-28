@@ -13,13 +13,19 @@ const jobSchema = new mongoose.Schema(
       required: true,
       trim: true
     },
+    idempotencyKey: {
+      type: String,
+      required: true,
+      unique: true,
+      index: true
+    },
     payload: {
       type: mongoose.Schema.Types.Mixed,
       default: {}
     },
     status: {
       type: String,
-      enum: ['WAITING', 'ACTIVE', 'COMPLETED', 'FAILED', 'DEAD_LETTER'],
+      enum: ['WAITING', 'ACTIVE', 'COMPLETED', 'FAILED', 'DEAD_LETTER', 'IDLE'],
       default: 'WAITING',
       index: true
     },
@@ -52,6 +58,11 @@ const jobSchema = new mongoose.Schema(
     failedAt: {
       type: Date,
       default: null
+    },
+    executionStatus: {
+      type: String,
+      enum: ['PENDING', 'RUNNING', 'DONE', 'FAILED'],
+      default: 'PENDING'
     }
   },
   {

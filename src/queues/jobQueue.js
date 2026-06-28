@@ -1,17 +1,10 @@
 const { Queue } = require('bullmq');
-const IORedis = require('ioredis');
 const { config } = require('../config/env');
 const { getBullMqBackoffConfig } = require('../config/backoff');
-
-const connection = new IORedis({
-  host: config.redisHost,
-  port: config.redisPort,
-  password: config.redisPassword,
-  maxRetriesPerRequest: null
-});
+const { redisClient } = require('../config/redisClient');
 
 const jobQueue = new Queue(config.queueName, {
-  connection,
+  connection: redisClient,
   defaultJobOptions: {
     removeOnComplete: true,
     removeOnFail: false,
@@ -20,4 +13,4 @@ const jobQueue = new Queue(config.queueName, {
   }
 });
 
-module.exports = { jobQueue, connection };
+module.exports = { jobQueue };
