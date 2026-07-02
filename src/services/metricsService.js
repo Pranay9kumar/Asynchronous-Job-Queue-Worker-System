@@ -25,14 +25,15 @@ async function getJobMetrics() {
 }
 
 async function getMetricsDashboard() {
-  const [queueMetrics, workerMetrics, apiMetrics, performanceMetrics, health, alertContext, alertStats] = await Promise.all([
+  const [queueMetrics, workerMetrics, apiMetrics, performanceMetrics, health, alertContext, alertStats, dlqCount] = await Promise.all([
     getQueueMetrics(),
     getWorkerMetrics(),
     getApiMetrics(),
     getPerformanceStatistics(),
     getSystemHealth(),
     getAlertContext(),
-    getActiveAlertStatistics()
+    getActiveAlertStatistics(),
+    JobModel.countDocuments({ status: 'DEAD_LETTER' })
   ]);
 
   await evaluateAlerts(alertContext).catch(() => undefined);
@@ -43,6 +44,7 @@ async function getMetricsDashboard() {
     apiMetrics,
     performanceMetrics,
     health,
+    dlqCount,
     alerts: alertStats
   };
 }

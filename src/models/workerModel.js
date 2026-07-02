@@ -19,7 +19,24 @@ const workerSchema = new mongoose.Schema(
       default: 0,
       min: 0
     },
+    currentJobId: {
+      type: String,
+      default: null,
+      index: true
+    },
+    currentJobType: {
+      type: String,
+      default: null
+    },
+    currentJobStartedAt: {
+      type: Date,
+      default: null
+    },
     lastActiveAt: {
+      type: Date,
+      default: null
+    },
+    lastHeartbeatAt: {
       type: Date,
       default: null
     },

@@ -1,4 +1,4 @@
-const { listDlqJobs, retryDlqJob } = require('../services/dlqService');
+const { listDlqJobs, retryDlqJob, deleteDlqJob } = require('../services/dlqService');
 
 async function getDlqController(req, res) {
   const jobs = await listDlqJobs();
@@ -15,7 +15,18 @@ async function retryDlqJobController(req, res) {
   return res.status(200).json(job);
 }
 
+async function deleteDlqJobController(req, res) {
+  const job = await deleteDlqJob(req.params.id);
+
+  if (!job) {
+    return res.status(404).json({ message: 'DLQ job not found' });
+  }
+
+  return res.status(200).json({ message: 'DLQ job deleted', jobId: job.jobId });
+}
+
 module.exports = {
   getDlqController,
-  retryDlqJobController
+  retryDlqJobController,
+  deleteDlqJobController
 };

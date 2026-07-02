@@ -206,6 +206,21 @@ async function resetJobForRetry(jobId) {
   );
 }
 
+async function setJobFailureState(jobId, failureReason) {
+  return JobModel.updateOne(
+    { jobId },
+    {
+      $set: {
+        status: 'FAILED',
+        executionStatus: 'FAILED',
+        failureReason,
+        lastFailureReason: failureReason,
+        failedAt: new Date()
+      }
+    }
+  );
+}
+
 module.exports = {
   createJob,
   getJobById,
@@ -214,5 +229,6 @@ module.exports = {
   markJobCompleted,
   markJobRetrying,
   markJobDeadLetter,
+  setJobFailureState,
   resetJobForRetry
 };

@@ -2,9 +2,18 @@ const { Worker } = require('bullmq');
 const { config } = require('../config/env');
 const { logger } = require('../config/logger');
 const { jobQueue } = require('../queues/jobQueue');
-const { markJobActive, markJobCompleted, assignWorkerToJob } = require('../services/jobService');
+const { markJobActive, markJobCompleted, assignWorkerToJob, setJobFailureState } = require('../services/jobService');
 const { handleJobFailure } = require('../services/failureHandler');
-const { upsertWorker, setWorkerBusy, setWorkerIdle, markWorkerOffline, incrementWorkerProcessed } = require('../services/workerService');
+const {
+  upsertWorker,
+  setWorkerBusy,
+  setWorkerIdle,
+  markWorkerOffline,
+  incrementWorkerProcessed,
+  setWorkerCurrentJob,
+  clearWorkerCurrentJob,
+  heartbeatWorker
+} = require('../services/workerService');
 const { redisClient } = require('../config/redisClient');
 const { recordJobPerformance } = require('../services/performanceService');
 
@@ -30,6 +39,8 @@ function initializeWorker() {
     config.queueName,
     async (job) => {
       await setWorkerBusy(config.workerId).catch(() => undefined);
+      await setWorkerCurrentJob(config.workerId, { jobId: job.data.jobId, type: job.data.type }).catch(() => undefined);
+      await heartbeatWorker(config.workerId).catch(() => undefined);
       logger.info(
         { component: 'worker', event: 'JOB_ASSIGNED', workerId: config.workerId, jobId: job.data.jobId, type: job.data.type, requestId: job.data.requestId },
         'Job assigned to worker'
@@ -51,6 +62,7 @@ function initializeWorker() {
       const performance = await recordJobPerformance(job);
       await markJobCompleted(job.data.jobId, performance);
       await incrementWorkerProcessed(config.workerId).catch(() => undefined);
+      await clearWorkerCurrentJob(config.workerId).catch(() => undefined);
       await setWorkerIdle(config.workerId).catch(() => undefined);
 
       logger.info(
@@ -101,6 +113,9 @@ function initializeWorker() {
 
     await handleJobFailure(job, error).catch(() => undefined);
 
+    await setJobFailureState(job.data.jobId, error.message).catch(() => undefined);
+    await clearWorkerCurrentJob(config.workerId).catch(() => undefined);
+
     logger.error(
       {
         component: 'worker',
@@ -126,6 +141,7 @@ async function stopWorker() {
   }
 
   if (workerInstance) {
+    await workerInstance.pause(true).catch(() => undefined);
     await markWorkerOffline(config.workerId).catch(() => undefined);
     await workerInstance.close();
     workerInstance = null;

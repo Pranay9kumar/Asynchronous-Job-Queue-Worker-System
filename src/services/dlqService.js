@@ -46,7 +46,18 @@ async function retryDlqJob(jobId) {
   ).lean();
 }
 
+async function deleteDlqJob(jobId) {
+  const job = await JobModel.findOneAndDelete({ jobId, status: 'DEAD_LETTER' }).lean();
+  if (!job) {
+    return null;
+  }
+
+  await removeQueuedJob(deadLetterQueue, jobId).catch(() => undefined);
+  return job;
+}
+
 module.exports = {
   listDlqJobs,
-  retryDlqJob
+  retryDlqJob,
+  deleteDlqJob
 };

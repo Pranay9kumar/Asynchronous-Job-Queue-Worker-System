@@ -8,7 +8,8 @@ async function upsertWorker(workerId, concurrency) {
       $set: {
         status: 'Idle',
         concurrency,
-        lastActiveAt: new Date()
+        lastActiveAt: new Date(),
+        lastHeartbeatAt: new Date()
       }
     },
     { upsert: true, new: true }
@@ -21,7 +22,8 @@ async function setWorkerBusy(workerId) {
     {
       $set: {
         status: 'Busy',
-        lastActiveAt: new Date()
+        lastActiveAt: new Date(),
+        lastHeartbeatAt: new Date()
       }
     }
   );
@@ -33,7 +35,11 @@ async function setWorkerIdle(workerId) {
     {
       $set: {
         status: 'Idle',
-        lastActiveAt: new Date()
+        currentJobId: null,
+        currentJobType: null,
+        currentJobStartedAt: null,
+        lastActiveAt: new Date(),
+        lastHeartbeatAt: new Date()
       }
     }
   );
@@ -45,6 +51,51 @@ async function markWorkerOffline(workerId) {
     {
       $set: {
         status: 'Offline',
+        lastActiveAt: new Date(),
+        lastHeartbeatAt: new Date()
+      }
+    }
+  );
+}
+
+async function setWorkerCurrentJob(workerId, job) {
+  return WorkerModel.updateOne(
+    { workerId },
+    {
+      $set: {
+        currentJobId: job.jobId,
+        currentJobType: job.type,
+        currentJobStartedAt: new Date(),
+        lastActiveAt: new Date(),
+        lastHeartbeatAt: new Date(),
+        status: 'Busy'
+      }
+    }
+  );
+}
+
+async function clearWorkerCurrentJob(workerId) {
+  return WorkerModel.updateOne(
+    { workerId },
+    {
+      $set: {
+        currentJobId: null,
+        currentJobType: null,
+        currentJobStartedAt: null,
+        lastActiveAt: new Date(),
+        lastHeartbeatAt: new Date(),
+        status: 'Idle'
+      }
+    }
+  );
+}
+
+async function heartbeatWorker(workerId) {
+  return WorkerModel.updateOne(
+    { workerId },
+    {
+      $set: {
+        lastHeartbeatAt: new Date(),
         lastActiveAt: new Date()
       }
     }
@@ -108,6 +159,9 @@ module.exports = {
   setWorkerBusy,
   setWorkerIdle,
   markWorkerOffline,
+  setWorkerCurrentJob,
+  clearWorkerCurrentJob,
+  heartbeatWorker,
   incrementWorkerProcessed,
   listWorkers,
   getWorkerMetrics

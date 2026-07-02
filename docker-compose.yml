@@ -1,5 +1,77 @@
 services:
   api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    env_file:
+      - .env.production
+    environment:
+      NODE_ENV: production
+      WORKER_ID: api-worker
+    ports:
+      - "3000:3000"
+    depends_on:
+      - mongo
+      - redis
+    restart: unless-stopped
+
+  worker-1:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["node", "worker.js"]
+    env_file:
+      - .env.production
+    environment:
+      NODE_ENV: production
+      WORKER_ID: worker-1
+    depends_on:
+      - mongo
+      - redis
+    restart: unless-stopped
+
+  worker-2:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["node", "worker.js"]
+    env_file:
+      - .env.production
+    environment:
+      NODE_ENV: production
+      WORKER_ID: worker-2
+    depends_on:
+      - mongo
+      - redis
+    restart: unless-stopped
+
+  mongo:
+    image: mongo:7
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "8080:80"
+    depends_on:
+      - api
+    restart: unless-stopped
+
+volumes:
+  mongo_data:services:
+  api:
     build: .
     ports:
       - "3000:3000"

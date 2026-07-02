@@ -6,6 +6,7 @@ function requestMetrics(req, res, next) {
   res.on('finish', () => {
     const finishedAt = process.hrtime.bigint();
     const durationMs = Number(finishedAt - startedAt) / 1e6;
+    res.locals.requestDurationMs = durationMs;
 
     recordApiRequest({
       method: req.method,
