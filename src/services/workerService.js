@@ -1,4 +1,5 @@
 const { WorkerModel } = require('../models/workerModel');
+const { JobModel } = require('../models/jobModel');
 
 async function upsertWorker(workerId, concurrency) {
   return WorkerModel.findOneAndUpdate(
@@ -69,7 +70,7 @@ async function listWorkers() {
 }
 
 async function getWorkerMetrics() {
-  const [activeWorkers, idleWorkers, totals] = await Promise.all([
+  const [activeWorkers, idleWorkers, totals, processingStats] = await Promise.all([
     WorkerModel.countDocuments({ status: 'Busy' }),
     WorkerModel.countDocuments({ status: 'Idle' }),
     WorkerModel.aggregate([
@@ -79,13 +80,26 @@ async function getWorkerMetrics() {
           totalProcessedJobs: { $sum: '$jobsProcessed' }
         }
       }
+    ]),
+    JobModel.aggregate([
+      {
+        $group: {
+          _id: null,
+          averageProcessingTimeMs: { $avg: '$processingTimeMs' }
+        }
+      }
     ])
   ]);
+
+  const totalWorkers = activeWorkers + idleWorkers;
+  const workerUtilization = totalWorkers ? Number(((activeWorkers / totalWorkers) * 100).toFixed(2)) : 0;
 
   return {
     activeWorkers,
     idleWorkers,
-    totalProcessedJobs: totals[0]?.totalProcessedJobs || 0
+    totalProcessedJobs: totals[0]?.totalProcessedJobs || 0,
+    averageProcessingTimeMs: Number((processingStats[0]?.averageProcessingTimeMs || 0).toFixed(2)),
+    workerUtilization
   };
 }
 

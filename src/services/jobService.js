@@ -6,7 +6,17 @@ const { config } = require('../config/env');
 const { buildIdempotencyKey, getExistingJobIdForKey, lockIdempotencyKey } = require('../config/idempotency');
 const { findJobByIdempotencyKey } = require('./duplicateDetectionService');
 
-async function createJob({ type, payload, maxRetries = config.maxRetries, idempotencyKey: providedIdempotencyKey }) {
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function createJob({
+  type,
+  payload,
+  maxRetries = config.maxRetries,
+  idempotencyKey: providedIdempotencyKey,
+  requestId = null
+}) {
   const idempotencyKey = buildIdempotencyKey(type, payload, providedIdempotencyKey);
 
   const existingJobId = await getExistingJobIdForKey(idempotencyKey);
@@ -21,11 +31,37 @@ async function createJob({ type, payload, maxRetries = config.maxRetries, idempo
   const jobId = randomUUID();
 
   try {
-    await lockIdempotencyKey(idempotencyKey, jobId);
+    const lockResult = await lockIdempotencyKey(idempotencyKey, jobId);
+    if (!lockResult) {
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        const existingJob = await findJobByIdempotencyKey(idempotencyKey);
+        if (existingJob) {
+          logger.info({ component: 'queue', event: 'DUPLICATE_JOB_SKIPPED', jobId: existingJob.jobId, idempotencyKey, requestId }, 'Duplicate job skipped');
+          return existingJob;
+        }
+
+        await sleep(50);
+      }
+
+      const duplicateJobId = await getExistingJobIdForKey(idempotencyKey);
+      if (duplicateJobId) {
+        const existingJob = await JobModel.findOne({ jobId: duplicateJobId }).lean();
+        if (existingJob) {
+          logger.info({ component: 'queue', event: 'DUPLICATE_JOB_SKIPPED', jobId: existingJob.jobId, idempotencyKey, requestId }, 'Duplicate job skipped');
+          return existingJob;
+        }
+      }
+
+      const conflict = new Error('Duplicate job request is already being processed');
+      conflict.statusCode = 409;
+      conflict.name = 'ValidationError';
+      throw conflict;
+    }
 
     const jobRecord = await JobModel.create({
       jobId,
       type,
+      requestId,
       idempotencyKey,
       payload,
       status: 'WAITING',
@@ -34,9 +70,9 @@ async function createJob({ type, payload, maxRetries = config.maxRetries, idempo
       executionStatus: 'PENDING'
     });
 
-    await jobQueue.add(type, { jobId, type, payload }, { jobId, attempts: maxRetries + 1 });
+    await jobQueue.add(type, { jobId, type, payload, requestId, idempotencyKey }, { jobId, attempts: maxRetries + 1 });
 
-    logger.info({ component: 'queue', event: 'JOB_CREATED', jobId, type, maxRetries, idempotencyKey }, 'Job Created');
+    logger.info({ component: 'queue', event: 'JOB_CREATED', jobId, type, maxRetries, idempotencyKey, requestId }, 'Job Created');
 
     return jobRecord.toObject();
   } catch (error) {
@@ -78,6 +114,7 @@ async function markJobActive(jobId, retryCount = 0) {
         startedAt: new Date(),
         retryCount,
         executionStatus: 'RUNNING',
+        workerId: null,
         failureReason: null,
         lastFailureReason: null
       }
@@ -85,7 +122,19 @@ async function markJobActive(jobId, retryCount = 0) {
   );
 }
 
-async function markJobCompleted(jobId) {
+async function assignWorkerToJob(jobId, workerId) {
+  return JobModel.updateOne(
+    { jobId },
+    {
+      $set: {
+        workerId,
+        lastWorkerSeenAt: new Date()
+      }
+    }
+  );
+}
+
+async function markJobCompleted(jobId, performance = {}) {
   return JobModel.updateOne(
     { jobId },
     {
@@ -95,7 +144,11 @@ async function markJobCompleted(jobId) {
         executionStatus: 'DONE',
         failureReason: null,
         lastFailureReason: null,
-        failedAt: null
+        failedAt: null,
+        queueTimeMs: performance.queueTimeMs || 0,
+        processingTimeMs: performance.processingTimeMs || 0,
+        endToEndCompletionTimeMs: performance.endToEndCompletionTimeMs || 0,
+        performanceRecordedAt: performance.performanceRecordedAt || new Date()
       }
     }
   );
@@ -111,7 +164,8 @@ async function markJobRetrying(jobId, failureReason, retryCount) {
         executionStatus: 'PENDING',
         failureReason,
         lastFailureReason: failureReason,
-        failedAt: null
+        failedAt: null,
+        workerId: null
       }
     }
   );
@@ -127,7 +181,8 @@ async function markJobDeadLetter(jobId, failureReason, retryCount) {
         executionStatus: 'FAILED',
         failureReason,
         lastFailureReason: failureReason,
-        failedAt: new Date()
+        failedAt: new Date(),
+        workerId: null
       }
     }
   );
@@ -155,6 +210,7 @@ module.exports = {
   createJob,
   getJobById,
   markJobActive,
+  assignWorkerToJob,
   markJobCompleted,
   markJobRetrying,
   markJobDeadLetter,

@@ -2,9 +2,15 @@ const { logger } = require('../config/logger');
 const { deadLetterQueue } = require('../queues/dlqQueue');
 const { recordRetryState } = require('./retryService');
 const { getExponentialBackoffDelay } = require('../config/backoff');
+const { evaluateAlerts, getAlertContext } = require('./alertService');
 
 async function handleJobFailure(job, error) {
   const retryState = await recordRetryState(job, error.message);
+
+  const alertContext = await getAlertContext().catch(() => null);
+  if (alertContext) {
+    await evaluateAlerts(alertContext).catch(() => undefined);
+  }
 
   if (retryState.status === 'DEAD_LETTER') {
     await deadLetterQueue.add(
@@ -25,6 +31,7 @@ async function handleJobFailure(job, error) {
         event: 'JOB_MOVED_TO_DLQ',
         jobId: job.data.jobId,
         type: job.data.type,
+        requestId: job.data.requestId,
         retryCount: retryState.retryCount,
         error: error.message
       },
@@ -40,6 +47,7 @@ async function handleJobFailure(job, error) {
       event: 'JOB_RETRYING',
       jobId: job.data.jobId,
       type: job.data.type,
+      requestId: job.data.requestId,
       retryCount: retryState.retryCount,
       nextRetryDelayMs: getExponentialBackoffDelay(retryState.retryCount),
       error: error.message

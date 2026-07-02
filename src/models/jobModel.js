@@ -13,6 +13,11 @@ const jobSchema = new mongoose.Schema(
       required: true,
       trim: true
     },
+    requestId: {
+      type: String,
+      default: null,
+      index: true
+    },
     idempotencyKey: {
       type: String,
       required: true,
@@ -63,6 +68,31 @@ const jobSchema = new mongoose.Schema(
       type: String,
       enum: ['PENDING', 'RUNNING', 'DONE', 'FAILED'],
       default: 'PENDING'
+    },
+    workerId: {
+      type: String,
+      default: null,
+      index: true
+    },
+    lastWorkerSeenAt: {
+      type: Date,
+      default: null
+    },
+    queueTimeMs: {
+      type: Number,
+      default: 0
+    },
+    processingTimeMs: {
+      type: Number,
+      default: 0
+    },
+    endToEndCompletionTimeMs: {
+      type: Number,
+      default: 0
+    },
+    performanceRecordedAt: {
+      type: Date,
+      default: null
     }
   },
   {

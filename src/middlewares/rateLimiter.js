@@ -2,6 +2,10 @@ const { redisClient } = require('../config/redisClient');
 const { config } = require('../config/env');
 
 async function rateLimiter(req, res, next) {
+  if (req.method !== 'POST' || !(req.originalUrl || req.path || '').startsWith('/jobs')) {
+    return next();
+  }
+
   const clientIp = req.ip || req.headers['x-forwarded-for'] || req.connection?.remoteAddress || 'unknown';
   const minuteBucket = Math.floor(Date.now() / 60000);
   const key = `rate:${clientIp}:${minuteBucket}`;

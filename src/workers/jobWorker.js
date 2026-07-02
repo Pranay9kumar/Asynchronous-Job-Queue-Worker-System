@@ -2,10 +2,11 @@ const { Worker } = require('bullmq');
 const { config } = require('../config/env');
 const { logger } = require('../config/logger');
 const { jobQueue } = require('../queues/jobQueue');
-const { markJobActive, markJobCompleted } = require('../services/jobService');
+const { markJobActive, markJobCompleted, assignWorkerToJob } = require('../services/jobService');
 const { handleJobFailure } = require('../services/failureHandler');
 const { upsertWorker, setWorkerBusy, setWorkerIdle, markWorkerOffline, incrementWorkerProcessed } = require('../services/workerService');
 const { redisClient } = require('../config/redisClient');
+const { recordJobPerformance } = require('../services/performanceService');
 
 let workerInstance = null;
 let workerStatusTimer = null;
@@ -30,13 +31,14 @@ function initializeWorker() {
     async (job) => {
       await setWorkerBusy(config.workerId).catch(() => undefined);
       logger.info(
-        { component: 'worker', event: 'JOB_ASSIGNED', workerId: config.workerId, jobId: job.data.jobId, type: job.data.type },
+        { component: 'worker', event: 'JOB_ASSIGNED', workerId: config.workerId, jobId: job.data.jobId, type: job.data.type, requestId: job.data.requestId },
         'Job assigned to worker'
       );
 
       await markJobActive(job.data.jobId, job.attemptsMade || 0);
+      await assignWorkerToJob(job.data.jobId, config.workerId).catch(() => undefined);
       logger.info(
-        { component: 'worker', event: 'JOB_STARTED', workerId: config.workerId, jobId: job.data.jobId, type: job.data.type, retryCount: job.attemptsMade || 0 },
+        { component: 'worker', event: 'JOB_STARTED', workerId: config.workerId, jobId: job.data.jobId, type: job.data.type, requestId: job.data.requestId, retryCount: job.attemptsMade || 0 },
         'Job Started'
       );
 
@@ -46,12 +48,21 @@ function initializeWorker() {
 
       await delay(config.jobProcessingDelayMs);
 
-      await markJobCompleted(job.data.jobId);
+      const performance = await recordJobPerformance(job);
+      await markJobCompleted(job.data.jobId, performance);
       await incrementWorkerProcessed(config.workerId).catch(() => undefined);
       await setWorkerIdle(config.workerId).catch(() => undefined);
 
       logger.info(
-        { component: 'worker', event: 'JOB_COMPLETED', workerId: config.workerId, jobId: job.data.jobId, type: job.data.type },
+        {
+          component: 'worker',
+          event: 'JOB_COMPLETED',
+          workerId: config.workerId,
+          jobId: job.data.jobId,
+          type: job.data.type,
+          requestId: job.data.requestId,
+          executionTimeMs: performance.endToEndCompletionTimeMs
+        },
         'Job Completed'
       );
 
@@ -76,6 +87,11 @@ function initializeWorker() {
     await markWorkerOffline(config.workerId).catch(() => undefined);
   });
 
+  workerInstance.on('stopped', async () => {
+    await markWorkerOffline(config.workerId).catch(() => undefined);
+    logger.info({ component: 'worker', event: 'WORKER_STOPPED', workerId: config.workerId }, 'Worker stopped');
+  });
+
   logger.info({ component: 'worker', event: 'WORKER_STARTED', workerId: config.workerId, concurrency: config.workerConcurrency }, 'Worker started');
 
   workerInstance.on('failed', async (job, error) => {
@@ -89,8 +105,10 @@ function initializeWorker() {
       {
         component: 'worker',
         event: 'JOB_FAILED',
+        workerId: config.workerId,
         jobId: job.data.jobId,
         type: job.data.type,
+        requestId: job.data.requestId,
         retryCount: job.attemptsMade || 0,
         error: error.message
       },

@@ -12,6 +12,8 @@ const config = {
   workerConcurrency: Number(process.env.WORKER_CONCURRENCY || 3),
   workerId: process.env.WORKER_ID || `worker-${process.pid}`,
   rateLimitMaxJobsPerMinute: Number(process.env.RATE_LIMIT_MAX_JOBS_PER_MINUTE || 100),
+  dlqAlertThreshold: Number(process.env.DLQ_ALERT_THRESHOLD || 10),
+  failureRateAlertThreshold: Number(process.env.FAILURE_RATE_ALERT_THRESHOLD || 0.5),
   jobProcessingDelayMs: Number(process.env.JOB_PROCESSING_DELAY_MS || 3000),
   logLevel: process.env.LOG_LEVEL || 'info'
 };
