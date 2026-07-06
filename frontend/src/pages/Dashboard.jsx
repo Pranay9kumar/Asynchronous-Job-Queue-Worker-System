@@ -60,7 +60,7 @@ function Dashboard() {
         <Card title="Active Jobs" value={loading ? '...' : queueMetrics.active || 0} subtext="Currently processing" tone="accent" />
         <Card title="Completed Jobs" value={loading ? '...' : queueMetrics.completed || 0} subtext="Successfully finished" />
         <Card title="Failed Jobs" value={loading ? '...' : queueMetrics.failed || 0} subtext="Failed after retries" tone="danger" />
-        <Card title="DLQ Jobs" value={loading ? '...' : alerts.totalAlerts || 0} subtext="Dead-letter and alert count" tone="warning" />
+        <Card title="DLQ Jobs" value={loading ? '...' : data?.dlqCount || 0} subtext="Dead-letter backlog" tone="warning" />
         <Card title="Worker Utilization" value={loading ? '...' : `${workerMetrics.workerUtilization || 0}%`} subtext="Busy worker share" tone="accent" />
       </div>
 
